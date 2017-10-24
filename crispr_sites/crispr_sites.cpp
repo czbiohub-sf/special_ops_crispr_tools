@@ -361,7 +361,7 @@ void scan_stdin(bool output_counts) {
             count = 0;
         }
         last = *it;
-	++count;
+        ++count;
     }
 
     cerr << "Outputting " << guides << " unique guides." << endl;
