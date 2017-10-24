@@ -381,14 +381,6 @@ void scan_stdin(bool output_counts) {
             cout << get<1>(*it) << endl;
         }
     }
-    // for (auto it = results.begin();  it != results.end();  ++it) {
-    //     if (*it != last) {
-    //         decode(obuf, k-3, *it);
-    //         cout << obuf;
-    //     }
-    //     last = *it;
-    // }
-
 }
 
 
