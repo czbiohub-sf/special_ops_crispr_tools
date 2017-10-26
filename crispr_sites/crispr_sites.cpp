@@ -249,9 +249,6 @@ void scan_stdin(bool output_counts) {
 
     vector<int64_t> results;
 
-    // unique crispr sites in results, together with frequencies
-    vector< tuple<int64_t, int32_t> > results_unique; 
-    
     constexpr auto STRIDE_SIZE = 32 * 1024 * 1024;
 
     // to scan for k-mers, consecutive read windows must overlap by k-1 characters
@@ -343,27 +340,21 @@ void scan_stdin(bool output_counts) {
     // and then merging incrementally with c++ algorithm set_union,
     // rather than doing a huge sort at the end.   Parallelizing, esp on GPU,
     // could yield phenomenal speedup if we ever need to run this program fast.
-
-    // Counting the multiplicity of guides is used for DASH guide
-    // creation in dashdat -dynerman
+    //     Counting the multiplicity of guides is used for DASH guide
+    //     creation in dashdat -dynerman
     
     cerr << "Sorting " << results.size() << " candidate guides." << endl;
     sort(results.begin(), results.end());
 
     // 0 is not a valid code
     int64_t last = 0;
-    int32_t count = 0;
     for (auto it = results.begin();  it != results.end();  ++it) {
         if (*it != last) {
             ++guides;
-
-            results_unique.push_back(make_tuple(*it, count));
-            count = 0;
         }
         last = *it;
-        ++count;
     }
-
+    
     cerr << "Outputting " << guides << " unique guides." << endl;
     last = 0;
     char obuf[k-1];
@@ -373,12 +364,17 @@ void scan_stdin(bool output_counts) {
     if (output_counts) {
         obuf[k-3] = '\t';
     }
-    
-    for (auto it = results_unique.begin();  it != results_unique.end();  ++it) {
-        decode(obuf, k-3, get<0>(*it));
-        cout << obuf;
-        if (output_counts) {
-            cout << get<1>(*it) << endl;
+
+    int32_t current_count = 0;
+    for (auto it = results.begin();  it != results.end();  ++it) {
+        ++current_count;
+        if (*next(it) != *it) {
+            decode(obuf, k-3, *it);
+            cout << obuf;
+            if (output_counts) {
+                cout << current_count << endl;
+            }
+            current_count = 0;
         }
     }
 }
