@@ -368,7 +368,7 @@ void scan_stdin(bool output_counts) {
     int32_t current_count = 0;
     for (auto it = results.begin();  it != results.end();  ++it) {
         ++current_count;
-        if (*next(it) != *it) {
+        if (next(it) == results.end() || *next(it) != *it) {
             decode(obuf, k-3, *it);
             cout << obuf;
             if (output_counts) {
