@@ -21,7 +21,7 @@ using namespace std;
 //
 // Usage:
 //
-//    g++ -O3 --std=c++11 -o crispr_sites2 crispr_sites2.cpp
+//    g++ -O3 --std=c++11 -o crispr_sites crispr_sites.cpp
 //    gzip -dc ../../HUGE_DOWNLOADS/hg38.fa.gz | ./crispr_sites2 >! human_guides.txt
 //
 // Takes about 2 minutes on 2017 MacBook Pro.
@@ -205,6 +205,7 @@ void try_match(vector<int64_t>& results, const char* bufi) {
     constexpr auto opposite_direction = !direction;
     count[bufi[index<opposite_direction>(0)]] += 1;
     count[bufi[index<opposite_direction>(1)]] += 1;
+    cerr << count[cog] << endl;
     if (count[cog] + count['N'] == 2) {
         const int pam_N = count['N'];
         for (int j = 0;  j < k - 3;  ++j) {
@@ -258,6 +259,8 @@ void scan_stdin(bool output_counts) {
     vector<char> buffer(BUFFER_SIZE);
     char* window = buffer.data();
 
+    vector<int> separator_indices;
+    
     uintmax_t lines = 0;
     uintmax_t bases = 0;
     uintmax_t guides = 0;
@@ -293,6 +296,9 @@ void scan_stdin(bool output_counts) {
             char c = toupper(window[i]);
             if (c == '\n') {
                 ++lines;
+		if (chrm_comment) {
+		    separator_indices.push_back(len + 1);
+		}
                 chrm_comment = false;
             } else if (!(chrm_comment)) {
                 if (c == '>') {
@@ -306,6 +312,32 @@ void scan_stdin(bool output_counts) {
 
         bases += (len - overlap);
 
+	// How we scan_for_kmers
+	// ---------------------
+	// 
+	// Input is read from stdin into window. This buffer contains
+	// sequence stiched together from multiple lines/multiple
+	// chromosomes from the input FASTA file.
+	//
+	// We only wish to scan_for_kmers between input
+	// separators. separator_indices is a list of indices into
+	// window pointing to the start of the next segement we wish
+	// to scan
+	//
+	// We call scan_for_kmers on each segment
+	// seperator_indices[i], seperator_indices[i+1] for i < seperator_indices.size() - 1
+	//
+	// for the last segment, we call scan_for_kmers on seperator_indices.back(), window.back()
+	//
+	// the code will then copy the last k - 1 entries from window
+	// to the beginning, to handle the case that window split a
+	// contiguous sequence we wish to scan.
+	//
+	// we reset separator_indices after scanning the window,
+	// unless seperator_indices.back() is closer than k - 1 from
+	// the end of window, then we clear and re-add the last
+	// separator.
+	
         if (len < k) {
             // There are no k-mers in the current buffer.
             // This is likely the end of the file and the very last iteration.
@@ -313,9 +345,30 @@ void scan_stdin(bool output_counts) {
         } else {
             // window now starts with the last k-1 bases from the previous read,
             // plus all bases from the current read
-            scan_for_kmers(results, window, len);
+
+	    for (auto it = separator_indices.begin(); next(it) != separator_indices.end(); ++it) {
+		scan_for_kmers(results, window + *it, *next(it) - *it);
+	    }
+
+	    if (separator_indices.back() < len) {
+		scan_for_kmers(results, window + separator_indices.back(), len - separator_indices.back());
+	    }
+		
+            //scan_for_kmers(results, window, len);
             // overlap the last k-1 characters by moving them to the start of the window
             overlap = k - 1;
+
+	    // update the last separator_index after we move the end
+	    // of the window to the start
+	    auto last_index = separator_indices.back() - (len - overlap + 1);
+
+	    separator_indices.clear();
+
+	    if (last_index >= 0) {
+		separator_indices.push_back(last_index);
+	    }
+
+	    // move window over
             for (int i=0;  i < overlap;  ++i) {
                 window[i] = window[len - overlap + i];
             }
@@ -478,6 +531,8 @@ void print_usage(char* program_name) {
     cerr << "\t -h \t Print this help" << endl;
 }
 
+
+#ifndef CATCH_CONFIG_MAIN
 int main(int argc, char** argv) {
     int opt;
 
@@ -505,3 +560,8 @@ int main(int argc, char** argv) {
     scan_stdin(output_counts);
     return 0;
 }
+#endif
+
+// Local Variables:
+// compile-command: "g++ -O3 --std=c++11 -o crispr_sites crispr_sites.cpp"
+// End:
