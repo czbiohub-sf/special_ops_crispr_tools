@@ -12,6 +12,8 @@
 #include <chrono>
 using namespace std;
 
+#include "crispr_sites.hpp"
+
 #define PROGRAM_NAME "crispr_sites"
 #define VERSION "1.0"
 
@@ -25,9 +27,6 @@ using namespace std;
 //    gzip -dc ../../HUGE_DOWNLOADS/hg38.fa.gz | ./crispr_sites2 >! human_guides.txt
 //
 // Takes about 2 minutes on 2017 MacBook Pro.
-
-// Look for 20-mers at PAM sites.  Including NGG or CCN, k=23.
-constexpr auto k = 23;
 
 // Permit at most this many N characters per 23-mer.
 //
@@ -205,7 +204,7 @@ void try_match(vector<int64_t>& results, const char* bufi) {
     constexpr auto opposite_direction = !direction;
     count[bufi[index<opposite_direction>(0)]] += 1;
     count[bufi[index<opposite_direction>(1)]] += 1;
-    cerr << count[cog] << endl;
+
     if (count[cog] + count['N'] == 2) {
         const int pam_N = count['N'];
         for (int j = 0;  j < k - 3;  ++j) {
@@ -249,11 +248,6 @@ void scan_stdin(bool output_counts) {
     init_encoding();
 
     vector<int64_t> results;
-
-    constexpr auto STRIDE_SIZE = 32 * 1024 * 1024;
-
-    // to scan for k-mers, consecutive read windows must overlap by k-1 characters
-    constexpr auto BUFFER_SIZE = STRIDE_SIZE + k - 1;
 
     // using c++ vector provides transparent memory management
     vector<char> buffer(BUFFER_SIZE);
@@ -346,26 +340,30 @@ void scan_stdin(bool output_counts) {
             // window now starts with the last k-1 bases from the previous read,
             // plus all bases from the current read
 
-	    for (auto it = separator_indices.begin(); next(it) != separator_indices.end(); ++it) {
-		scan_for_kmers(results, window + *it, *next(it) - *it);
-	    }
-
-	    if (separator_indices.back() < len) {
-		scan_for_kmers(results, window + separator_indices.back(), len - separator_indices.back());
-	    }
-		
-            //scan_for_kmers(results, window, len);
             // overlap the last k-1 characters by moving them to the start of the window
             overlap = k - 1;
+	    
+	    if (separator_indices.size() == 0) {
+		// if not separators in this window, just scan it
+		scan_for_kmers(results, window, len);
+	    } else {
+		for (auto it = separator_indices.begin(); it != --separator_indices.end(); it++) {
+		    scan_for_kmers(results, window + *it, *next(it) - *it);
+		}
 
-	    // update the last separator_index after we move the end
-	    // of the window to the start
-	    auto last_index = separator_indices.back() - (len - overlap + 1);
+		if (separator_indices.back() < len) {
+		    scan_for_kmers(results, window + separator_indices.back(), len - separator_indices.back());
+		}
 
-	    separator_indices.clear();
+		// update the last separator_index after we move the end
+		// of the window to the start
+		auto last_index = separator_indices.back() - (len - overlap + 1);
 
-	    if (last_index >= 0) {
-		separator_indices.push_back(last_index);
+		separator_indices.clear();
+
+		if (last_index >= 0) {
+		    separator_indices.push_back(last_index);
+		}
 	    }
 
 	    // move window over
