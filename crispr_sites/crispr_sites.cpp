@@ -228,6 +228,11 @@ void try_match(vector<int64_t>& results, const char* bufi) {
 
 void scan_for_kmers(vector<int64_t>& results, const char* buf, size_t len) {
     assert(k <= 24);
+
+    if (len < k) {
+	return;
+    }
+
     for (int i = 0;  i <= len - k;  ++i) {
         // match ...GG, or ...GN, or ...NG, or ...NN
         try_match<forward_direction, 'G'>(results, buf + i);
@@ -347,22 +352,33 @@ void scan_stdin(bool output_counts) {
 		// if not separators in this window, just scan it
 		scan_for_kmers(results, window, len);
 	    } else {
+		// scan from the start of the window to the first separator
+		if (separator_indices[0] > 0) {
+		    scan_for_kmers(results, window, separator_indices[0]);
+		}
+
+		// scan between each block of separators
 		for (auto it = separator_indices.begin(); it != --separator_indices.end(); it++) {
 		    scan_for_kmers(results, window + *it, *next(it) - *it);
 		}
 
+		// scan after the last separator, to the end of the window
 		if (separator_indices.back() < len) {
 		    scan_for_kmers(results, window + separator_indices.back(), len - separator_indices.back());
 		}
 
-		// update the last separator_index after we move the end
-		// of the window to the start
-		auto last_index = separator_indices.back() - (len - overlap + 1);
+		if (separator_indices.back() >= len - overlap) {
+		    // the last separator was in the overlap region,
+		    // so adjust the overlap to start with the separator
 
-		separator_indices.clear();
+		    overlap = len - separator_indices.back();
 
-		if (last_index >= 0) {
-		    separator_indices.push_back(last_index);
+		    separator_indices.clear();
+		    separator_indices.push_back(0);
+		} else {
+		    // otherwise we're done with this batch of
+		    // separators, so clear them out
+		    separator_indices.clear();
 		}
 	    }
 
