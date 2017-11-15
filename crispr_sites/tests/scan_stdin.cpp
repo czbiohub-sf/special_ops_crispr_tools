@@ -52,7 +52,6 @@ void random_sequence_no_pam(char* output, int len) {
     }
 }
 
-
 TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
     init_encoding();
     
