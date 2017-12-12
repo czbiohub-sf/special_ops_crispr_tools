@@ -242,7 +242,7 @@ void try_match(vector<int64_t>& results, const char* bufi) {
 }
 
 
-int scan_for_kmers(vector<int64_t>& results, const char* buf, size_t len) {
+int scan_for_kmers(vector<int64_t>& results, vector<int64_t>& cut_sites, const char* buf, size_t len) {
     assert(k <= 24);
 
     if (len < k) {
@@ -253,9 +253,9 @@ int scan_for_kmers(vector<int64_t>& results, const char* buf, size_t len) {
     
     for (int i = 0;  i <= len - k;  ++i) {
         // match ...GG, or ...GN, or ...NG, or ...NN
-        try_match<forward_direction, 'G'>(results, buf + i);
+        try_match<forward_direction, 'G'>(results, cut_sites, buf + i);
         // match CC..., or CN..., or NC..., or NN...
-        try_match<reverse_complement, 'C'>(results, buf + i);
+        try_match<reverse_complement, 'C'>(results, cut_sites, buf + i);
     }
 
     return results.size() - num_results;
