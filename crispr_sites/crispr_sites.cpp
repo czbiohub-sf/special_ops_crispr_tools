@@ -15,9 +15,6 @@ using namespace std;
 
 #include "crispr_sites.hpp"
 
-#define PROGRAM_NAME "crispr_sites"
-#define VERSION "1.0"
-
 // This program scans its input for forward k-3 mers ending with GG,
 // or reverse k-3 mers ending with CC.   It filters out guides that
 // contain wildcards.  It supercedes crispr2_sites.py.
@@ -242,7 +239,7 @@ void try_match(vector<int64_t>& results, const char* bufi) {
 }
 
 
-int scan_for_kmers(vector<int64_t>& results, vector<int64_t>& cut_sites, const char* buf, size_t len) {
+int scan_for_kmers(vector<int64_t>& results, const char* buf, size_t len) {
     assert(k <= 24);
 
     if (len < k) {
@@ -253,9 +250,9 @@ int scan_for_kmers(vector<int64_t>& results, vector<int64_t>& cut_sites, const c
     
     for (int i = 0;  i <= len - k;  ++i) {
         // match ...GG, or ...GN, or ...NG, or ...NN
-        try_match<forward_direction, 'G'>(results, cut_sites, buf + i);
+        try_match<forward_direction, 'G'>(results, buf + i);
         // match CC..., or CN..., or NC..., or NN...
-        try_match<reverse_complement, 'C'>(results, cut_sites, buf + i);
+        try_match<reverse_complement, 'C'>(results, buf + i);
     }
 
     return results.size() - num_results;
@@ -641,7 +638,7 @@ int main(int argc, char** argv) {
 
     bool output_counts = false;
 
-    cerr << PROGRAM_NAME << " " << VERSION << endl;
+    cerr << PROGRAM_NAME << " " << PROGRAM_VERSION << endl;
     
     while ((opt = getopt(argc,argv,"ch")) != -1) {
         switch (opt) {
