@@ -454,9 +454,7 @@ void scan_stdin(bool output_reads) {
     // and then merging incrementally with c++ algorithm set_union,
     // rather than doing a huge sort at the end.   Parallelizing, esp on GPU,
     // could yield phenomenal speedup if we ever need to run this program fast.
-    //     Counting the multiplicity of guides is used for DASH guide
-    //     creation in dashdat -dynerman
-    
+
     cerr << "Sorting " << results.size() << " candidate guides." << endl;
 
     vector<size_t> sorted_indices = sort_indexes(results);
@@ -511,6 +509,10 @@ void scan_stdin(bool output_reads) {
         obuf[k-3] = '\t';
     }
 
+    if (output_reads) {
+	cout << "Total reads: " << current_read << endl;
+    }
+    
     int64_t i = 0;
     for (auto it = results.begin();  it != results.end();  ++it) {
         if (next(it) == results.end() || *next(it) != *it) {
