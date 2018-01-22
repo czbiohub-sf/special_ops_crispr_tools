@@ -265,7 +265,7 @@ long unixtime() {
     return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
-void scan_stdin(bool output_counts) {
+void scan_stdin(bool output_reads) {
 
     init_encoding();
 
@@ -503,30 +503,28 @@ void scan_stdin(bool output_counts) {
     assert(guides == unique_sites_to_reads.size());
     
     cerr << "Outputting " << guides << " unique guides." << endl;
-    last = 0;
+
     char obuf[k-1];
     obuf[k-2] = 0;
-    obuf[k-3] = '\t';
 
-    if (output_counts) {
+    if (output_reads) {
         obuf[k-3] = '\t';
     }
 
-    int32_t current_count = 0;
-    int i = 0;
+    int64_t i = 0;
     for (auto it = results.begin();  it != results.end();  ++it) {
-        ++current_count;
         if (next(it) == results.end() || *next(it) != *it) {
             decode(obuf, k-3, *it);
             cout << obuf;
-            if (output_counts) {
-                cout << current_count << endl;
-            }
-	    for (int j = 0; j < unique_sites_to_reads[i].size(); j++) {
-		cout << unique_sites_to_reads[i][j] << " ";
+            if (output_reads) {
+		for (int j = 0; j < unique_sites_to_reads[i].size(); j++) {
+		    cout << unique_sites_to_reads[i][j];
+		    if (j < (unique_sites_to_reads[i].size() - 1)) {
+			cout << " ";
+		    }
+		}
 	    }
 	    cout << endl;
-            current_count = 0;
 	    ++i;
         }
     }
@@ -627,7 +625,7 @@ void print_usage(char* program_name) {
 
     cerr << program_name << " -[c|h]" << endl;
 
-    cerr << "\t -c \t Additionally output counts of how many times a 20-mer appears in the input" << endl;
+    cerr << "\t -r \t Output the reads that each CRISPR site matches, use this for DASHit" << endl;
     cerr << "\t -h \t Print this help" << endl;
 }
 
@@ -636,14 +634,15 @@ void print_usage(char* program_name) {
 int main(int argc, char** argv) {
     int opt;
 
-    bool output_counts = false;
+    bool output_reads = false;
 
     cerr << PROGRAM_NAME << " " << PROGRAM_VERSION << endl;
     
-    while ((opt = getopt(argc,argv,"ch")) != -1) {
+    while ((opt = getopt(argc,argv,"rh")) != -1) {
         switch (opt) {
-        case 'c':
-            output_counts = true;
+        case 'r':
+            output_reads = true;
+	    cerr << "Outputting read indices for DASHit use" << endl;
             break;
         case '?':
         case 'h':
@@ -657,7 +656,7 @@ int main(int argc, char** argv) {
     
     init_encoding();
     silent_tests();
-    scan_stdin(output_counts);
+    scan_stdin(output_reads);
     return 0;
 }
 #endif
