@@ -8,6 +8,7 @@
 #include <ctype.h>
 #include <assert.h>
 #include <vector>
+#include <set>
 #include <algorithm>
 #include <chrono>
 #include <numeric>
@@ -378,30 +379,38 @@ void scan_stdin(bool output_reads) {
 	    if (separator_indices.size() == 0) {
 		// if not separators in this window, just scan it
 		num_crispr_sites_found = scan_for_kmers(results, window, len);
-		sites_to_reads.insert(sites_to_reads.end(), num_crispr_sites_found, current_read);
+		if (output_reads) {
+		    sites_to_reads.insert(sites_to_reads.end(), num_crispr_sites_found, current_read);
+		}
 	    } else {
 		// scan from the start of the window to the first separator
 		if (get<0>(separator_indices[0]) > 0) {
 		    num_crispr_sites_found = scan_for_kmers(results, window, get<0>(separator_indices[0]));
-		    sites_to_reads.insert(sites_to_reads.end(),
-					  num_crispr_sites_found,
-					  get<1>(separator_indices[0]) - 1);
+		    if (output_reads) {
+			sites_to_reads.insert(sites_to_reads.end(),
+					      num_crispr_sites_found,
+					      get<1>(separator_indices[0]) - 1);
+		    }
 		}
 
 		// scan between each block of separators
 		for (auto it = separator_indices.begin(); it != --separator_indices.end(); it++) {
 		    num_crispr_sites_found = scan_for_kmers(results, window + get<0>(*it), get<0>(*next(it)) - get<0>(*it));
-		    sites_to_reads.insert(sites_to_reads.end(),
-					  num_crispr_sites_found,
-					  get<1>(*it));
+		    if (output_reads) {
+			sites_to_reads.insert(sites_to_reads.end(),
+					      num_crispr_sites_found,
+					      get<1>(*it));
+		    }
 		}
 
 		// scan after the last separator, to the end of the window
  		if (get<0>(separator_indices.back()) < len) {
 		    num_crispr_sites_found = scan_for_kmers(results, window + get<0>(separator_indices.back()), len - get<0>(separator_indices.back()));
-		    sites_to_reads.insert(sites_to_reads.end(),
-					  num_crispr_sites_found,
-					  get<1>(separator_indices.back()));
+		    if (output_reads) {
+			sites_to_reads.insert(sites_to_reads.end(),
+					      num_crispr_sites_found,
+					      get<1>(separator_indices.back()));
+		    }
 		}
 
 		if (get<0>(separator_indices.back()) >= len - overlap) {
@@ -443,7 +452,9 @@ void scan_stdin(bool output_reads) {
     }
 
     // these are parallel arrays and should have the same size
-    assert(results.size() == sites_to_reads.size()); 
+    if (output_reads) {
+	assert(results.size() == sites_to_reads.size());
+    }
     
     cerr << "Finished reading input."  << endl;
     cerr << "Total lines: "  << lines  << endl;
@@ -459,30 +470,34 @@ void scan_stdin(bool output_reads) {
 
     vector<size_t> sorted_indices = sort_indexes(results);
     
-    vector<vector<int64_t> > unique_sites_to_reads;
+    vector<set<int64_t> > unique_sites_to_reads;
 
     int64_t last = 0;
-    for (int i = 0; i < results.size(); i++) {
-	if (results[sorted_indices[i]] != last) {
-	    vector<int64_t> unique_reads;
-	    unique_sites_to_reads.push_back(unique_reads);	    
+    
+    if (output_reads) {
+	for (int i = 0; i < results.size(); i++) {
+	    if (results[sorted_indices[i]] != last) {
+		set<int64_t> unique_reads;
+		unique_sites_to_reads.push_back(unique_reads);	    
+	    }
+	    unique_sites_to_reads.back().insert(sites_to_reads[sorted_indices[i]]);
+	    last = results[sorted_indices[i]];
 	}
-	unique_sites_to_reads.back().push_back(sites_to_reads[sorted_indices[i]]);
-	last = results[sorted_indices[i]];
-    }
 
-    cerr << "Unique sites to reads: " << unique_sites_to_reads.size() << endl;
 
-    int max_reads = 0;
-    int max_read_idx = -1;
-    for (int i = 0; i < unique_sites_to_reads.size(); i++) {
-	if (unique_sites_to_reads[i].size() > max_reads) {
-	    max_reads = unique_sites_to_reads[i].size();
-	    max_read_idx = sorted_indices[i];
+	cerr << "Unique sites to reads: " << unique_sites_to_reads.size() << endl;
+
+	int max_reads = 0;
+	int max_read_idx = -1;
+	for (int i = 0; i < unique_sites_to_reads.size(); i++) {
+	    if (unique_sites_to_reads[i].size() > max_reads) {
+		max_reads = unique_sites_to_reads[i].size();
+		max_read_idx = sorted_indices[i];
+	    }
 	}
-    }
 
-    cerr << "Guide " << max_read_idx << " had largest number of reads: " << max_reads << endl;
+	cerr << "Guide " << max_read_idx << " had largest number of reads: " << max_reads << endl;
+    }
 									 
     // TODO: refactor these for loops so they all just use sorted indices
     // Don't need to sort both indices and results in place, but for
@@ -498,12 +513,15 @@ void scan_stdin(bool output_reads) {
         last = *it;
     }
 
-    assert(guides == unique_sites_to_reads.size());
+    if (output_reads) {
+	assert(guides == unique_sites_to_reads.size());
+    }
     
     cerr << "Outputting " << guides << " unique guides." << endl;
 
     char obuf[k-1];
     obuf[k-2] = 0;
+    obuf[k-3] = 0;
 
     if (output_reads) {
         obuf[k-3] = '\t';
@@ -519,9 +537,9 @@ void scan_stdin(bool output_reads) {
             decode(obuf, k-3, *it);
             cout << obuf;
             if (output_reads) {
-		for (int j = 0; j < unique_sites_to_reads[i].size(); j++) {
-		    cout << unique_sites_to_reads[i][j];
-		    if (j < (unique_sites_to_reads[i].size() - 1)) {
+		for (auto it_reads = unique_sites_to_reads[i].begin(); it_reads != unique_sites_to_reads[i].end(); ++it_reads) {
+		    cout << *it_reads;
+		    if (next(it_reads) != unique_sites_to_reads[i].end()) {
 			cout << " ";
 		    }
 		}
