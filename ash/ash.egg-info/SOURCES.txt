@@ -1,0 +1,13 @@
+README.md
+setup.py
+ash/__init__.py
+ash/build.py
+ash/common.py
+ash/filter_offtarget.py
+ash/filter_offtarget_2.py
+ash/flash.py
+ash/target_index.py
+ash.egg-info/PKG-INFO
+ash.egg-info/SOURCES.txt
+ash.egg-info/dependency_links.txt
+ash.egg-info/top_level.txt
