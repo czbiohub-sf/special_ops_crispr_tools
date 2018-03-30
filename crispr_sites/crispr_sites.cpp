@@ -15,6 +15,9 @@
 using namespace std;
 
 #include "crispr_sites.hpp"
+=======
+#define PROGRAM_NAME "crispr_sites"
+#define VERSION "1.0"
 
 // This program scans its input for forward k-3 mers ending with GG,
 // or reverse k-3 mers ending with CC.   It filters out guides that
@@ -267,7 +270,6 @@ long unixtime() {
 }
 
 void scan_stdin(bool output_reads) {
-
     init_encoding();
 
     vector<int64_t> results;
@@ -465,7 +467,6 @@ void scan_stdin(bool output_reads) {
     // and then merging incrementally with c++ algorithm set_union,
     // rather than doing a huge sort at the end.   Parallelizing, esp on GPU,
     // could yield phenomenal speedup if we ever need to run this program fast.
-
     cerr << "Sorting " << results.size() << " candidate guides." << endl;
 
     vector<size_t> sorted_indices = sort_indexes(results);
