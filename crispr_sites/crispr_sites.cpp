@@ -15,7 +15,6 @@
 using namespace std;
 
 #include "crispr_sites.hpp"
-=======
 #define PROGRAM_NAME "crispr_sites"
 #define VERSION "1.0"
 
