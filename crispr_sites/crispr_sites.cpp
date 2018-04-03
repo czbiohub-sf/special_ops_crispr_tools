@@ -15,8 +15,6 @@
 using namespace std;
 
 #include "crispr_sites.hpp"
-#define PROGRAM_NAME "crispr_sites"
-#define VERSION "1.0"
 
 // This program scans its input for forward k-3 mers ending with GG,
 // or reverse k-3 mers ending with CC.   It filters out guides that
@@ -650,7 +648,8 @@ void print_usage(char* program_name) {
 }
 
 
-#ifndef CATCH_CONFIG_MAIN
+// when compiling unit tests, the unit testing framework provides its own main()
+#ifndef UNIT_TESTS
 int main(int argc, char** argv) {
     int opt;
 

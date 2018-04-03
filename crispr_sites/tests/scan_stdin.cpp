@@ -31,7 +31,7 @@ char random_base(void) {
 	return 'C';
     case 2:
 	return 'G';
-    case 3:
+    default:
 	return 'T';
     }
 }
