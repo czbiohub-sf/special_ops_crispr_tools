@@ -9,8 +9,11 @@ $(PROGRAM_NAME) : crispr_sites.o
 crispr_sites.o : crispr_sites.cpp crispr_sites.hpp
 	g++ $(CPPFLAGS) -DPROGRAM_VERSION=\"$(PROGRAM_VERSION)\" -DPROGRAM_NAME=\"$(PROGRAM_NAME)\" -c crispr_sites.cpp
 
-.PHONY: clean
+tests:
+	cd tests && make && ./tests_all
+
+.PHONY: clean tests
 
 clean:
 	rm -f $(PROGRAM_NAME) crispr_sites.o
-
+	cd tests && make clean
