@@ -13,44 +13,48 @@ def kmers(seq, k):
     for i in kmers_range(seq, k):
         yield (i, seq[i:i+k])
 
-def poor_structure(forward_kmer, need_explanation=False,
+def poor_structure(forward_kmers,
                    parms={ 'gc_frequency': (5, 15),
                            'homopolymer': 5,
                            'dinucleotide_repeats': 3,
                            'hairpin': {'min_inner': 3, 'min_outer':5} }):
-    assert len(forward_kmer) == 20
-    kmer = forward_kmer
-    freq = character_count(kmer)
-    reasons = []
-    gc_freq = freq['G'] + freq['C']
+
+    if type(forward_kmers) == str:
+        forward_kmers = [forward_kmers]
+
+    filtered_kmers = {}
+
+    # Computing the bounds for checking hairpins is expensive and only
+    # needs to be done once per setting of hairpin min_inner and
+    # min_outer
+    hairpin_cache_key = (20, parms['hairpin']['min_outer'], parms['hairpin']['min_inner'])
+    hairpin_bounds = {hairpin_cache_key: list(generate_hairpin_bounds(hairpin_cache_key))}
     
-    if (gc_freq < parms['gc_frequency'][0] or
-        gc_freq > parms['gc_frequency'][1]):
-        if not need_explanation:
-            return True
-        reasons.append('gc_frequency')
-    if longest_consecutive_run(kmer) > parms['homopolymer']:
-        if not need_explanation:
-            return True
-        reasons.append('homopolymer>{}'.format(parms['homopolymer']))
-    if longest_dinucleotide_run(kmer) > parms['dinucleotide_repeats']:
-        if not need_explanation:
-            return True
-        reasons.append('dinucleotide_repeats>{}'.format(
-            parms['dinucleotide_repeats']))
-    hairpin = find_hairpin(kmer, {},
-                           min_outer=parms['hairpin']['min_outer'],
-                           min_inner=parms['hairpin']['min_inner'])
-    if hairpin:
-        if not need_explanation:
-            return True
-        reasons.append('hairpin (min_outer: {}, '
-                       'min_inner: {}):'.format(parms['hairpin']['min_outer'],
-                                                parms['hairpin']['min_inner'])
-                       + hairpin)
-    if not need_explanation:
-        return False
-    return reasons
+    for kmer in forward_kmers:
+        freq = character_count(kmer)
+        reasons = []
+        gc_freq = freq['G'] + freq['C']
+    
+        if (gc_freq < parms['gc_frequency'][0] or
+            gc_freq > parms['gc_frequency'][1]):
+
+            filtered_kmers[kmer] = 'gc_frequency'
+
+        if longest_consecutive_run(kmer) > parms['homopolymer']:
+            filtered_kmers[kmer] = 'homopolymer>{}'.format(parms['homopolymer'])
+
+        if longest_dinucleotide_run(kmer) > parms['dinucleotide_repeats']:
+            filtered_kmers[kmer] = 'dinucleotide_repeats>{}'.format(parms['dinucleotide_repeats'])
+            
+        hairpin = find_hairpin(kmer, hairpin_bounds,
+                               min_outer=parms['hairpin']['min_outer'],
+                               min_inner=parms['hairpin']['min_inner'])
+        if hairpin:
+            filtered_kmers[kmer] = ('hairpin (min_outer: {}, '
+                                    'min_inner: {}):'.format(parms['hairpin']['min_outer'],
+                                                             parms['hairpin']['min_inner'])
+                                    + hairpin)
+    return filtered_kmers
 
 def character_count(kmer):
     d = defaultdict(int)
