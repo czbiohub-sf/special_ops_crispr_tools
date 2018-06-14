@@ -7,4 +7,4 @@ setup(
     author='David Dynerman',
     author_email='david.dynerman@czbiohub.org',
     packages=['ash'],
-)
+    )
