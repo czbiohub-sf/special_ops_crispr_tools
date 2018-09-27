@@ -178,7 +178,7 @@ void emit(vector<int64_t>& results, const char* guide) {
 
 
 template <bool direction>
-void emit_all_variants(vector<int64_t>& results, const char* guide, const int num_N_to_expand) {
+int emit_all_variants(vector<int64_t>& results, const char* guide, const int num_N_to_expand) {
     // assert count of 'N' characters in rc[0...k-3] equals num_N_to_expand
     constexpr char bases[] = {'A', 'C', 'G', 'T'};
     char guide_variant[k - 3];  // not 0-terminated
@@ -199,6 +199,7 @@ void emit_all_variants(vector<int64_t>& results, const char* guide, const int nu
         } while (pos);
         emit<direction>(results, guide_variant);
     }
+    return number_variants;
 }
 
 
@@ -209,7 +210,7 @@ int index(const int j) {
 
 
 template <bool direction, char cog>
-void try_match(vector<int64_t>& results, const char* bufi) {
+int try_match(vector<int64_t>& results, const char* bufi) {
     char guide[k - 3];  // not 0 terminated
     int count[1 << (sizeof(char) * 8)];
     assert(cog == 'C' || cog == 'G');
@@ -230,30 +231,42 @@ void try_match(vector<int64_t>& results, const char* bufi) {
         if (count['N'] <= max_N) {
             const int num_N_to_expand = count['N'] - pam_N;
             if (expand_N_variants && num_N_to_expand > 0) {
-                emit_all_variants<direction>(results, guide, num_N_to_expand);
+                return emit_all_variants<direction>(results, guide, num_N_to_expand);
             } else {
                 // common case, no Ns to expand in this 20-mer
                 emit<direction>(results, guide);
+		return 1;
             }
         }
     }
+    return 0;
 }
 
 
-int scan_for_kmers(vector<int64_t>& results, const char* buf, size_t len) {
+int scan_for_kmers(vector<int64_t>& results, vector<pair<int64_t, int64_t> >& results_location, int64_t offset, const char* buf, size_t len) {
     assert(k <= 24);
 
     if (len < k) {
 	return 0;
     }
-
+    
     int64_t num_results = results.size();
+    int num_matches_found = 0;
     
     for (int i = 0;  i <= len - k;  ++i) {
         // match ...GG, or ...GN, or ...NG, or ...NN
-        try_match<forward_direction, 'G'>(results, buf + i);
+        num_matches_found = try_match<forward_direction, 'G'>(results, buf + i);
+	if (num_matches_found) {
+	    // compute the location of this protospacer
+	    results_location.insert(results_location.end(), num_matches_found, make_pair(offset + i, offset + i + (k - 3) - 1));
+	}
+
         // match CC..., or CN..., or NC..., or NN...
-        try_match<reverse_complement, 'C'>(results, buf + i);
+        num_matches_found = try_match<reverse_complement, 'C'>(results, buf + i);
+	if (num_matches_found) {
+	    // compute the location of this protospacer
+	    results_location.insert(results_location.end(), num_matches_found, make_pair(offset + i + 3, offset + i + k - 1));
+	}
     }
 
     return results.size() - num_results;
@@ -266,7 +279,7 @@ long unixtime() {
     return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
-void scan_stdin(bool output_reads) {
+void scan_stdin(bool output_reads, bool output_locations) {
     init_encoding();
 
     vector<int64_t> results;
@@ -278,6 +291,15 @@ void scan_stdin(bool output_reads) {
     vector<char> buffer(BUFFER_SIZE);
     char* window = buffer.data();
 
+    vector<char> description_buffer(BUFFER_SIZE);
+    char* current_description = description_buffer.data();
+    
+    // array of actual descriptions
+    vector<string> location_descriptions;
+
+    // array of locations within a chromosome for each protospacer
+    vector<pair<int64_t, int64_t> > results_location;
+        
     // pairs of (separator_index, read_number)
     vector<pair<int64_t, int64_t> > separator_indices;
     
@@ -295,17 +317,22 @@ void scan_stdin(bool output_reads) {
 
     int64_t current_read = 0;
 
-    while (true) {
+    int64_t separator_offset = -1;
+
+    bool keep_running = true;
+    
+    while (keep_running) {
 
         assert(0 <= overlap);
         assert(overlap < k);
 
         const ssize_t bytes_read = read(fileno(stdin), window + overlap, STRIDE_SIZE);
-
+	//cerr << "Read " << bytes_read << " bytes" << endl;
         // end of file
         if (bytes_read == 0) {
             break;
         }
+
 
         // Not sure when this happens.
         if (bytes_read == (ssize_t) -1) {
@@ -314,13 +341,20 @@ void scan_stdin(bool output_reads) {
 
         // Convert to uppercase and filter out chromosome comments.
         int len = overlap;
-        for (int i = overlap;  i < bytes_read + overlap;  ++i) {
+
+	int len_description = 0;
+
+	for (int i = overlap;  i < bytes_read + overlap;  ++i) {
             char c = toupper(window[i]);
             if (c == '\n') {
                 ++lines;
 		if (chrm_comment) {
 		    separator_indices.push_back(make_pair(len, current_read + 1));
 		    current_read += 1;
+
+		    current_description[len_description] = 0;
+		    location_descriptions.push_back(current_description);
+		    len_description = 0;
 		}
                 chrm_comment = false;
             } else if (!(chrm_comment)) {
@@ -332,11 +366,15 @@ void scan_stdin(bool output_reads) {
 			window[len++] = c;
 		    }
                 }
-            }
+            } else if (chrm_comment) {
+		current_description[len_description++] = window[i];
+		// location descriptions shouldn't be larger than BUFFER_SIZE
+		assert( len_description < BUFFER_SIZE );
+	    }
         }
 
         bases += (len - overlap);
-
+	
 	// How we scan_for_kmers
 	// ---------------------
 	// 
@@ -378,16 +416,22 @@ void scan_stdin(bool output_reads) {
 	    int num_crispr_sites_found = 0;
 	    
 	    if (separator_indices.size() == 0) {
-		// if not separators in this window, just scan it
-		num_crispr_sites_found = scan_for_kmers(results, window, len);
-		if (output_reads) {
+		// in a properly formatted FASTA file, this needs to
+		// be correctly set below before we reach this point
+		assert(separator_offset >= 0);
+		//cerr << "case 1" << endl;
+		// if no separators in this window, just scan it
+		num_crispr_sites_found = scan_for_kmers(results, results_location, separator_offset, window, len);
+		if (output_reads || output_locations) {
 		    sites_to_reads.insert(sites_to_reads.end(), num_crispr_sites_found, current_read);
 		}
+
+		separator_offset += len - overlap;
 	    } else {
 		// scan from the start of the window to the first separator
 		if (get<0>(separator_indices[0]) > 0) {
-		    num_crispr_sites_found = scan_for_kmers(results, window, get<0>(separator_indices[0]));
-		    if (output_reads) {
+		    num_crispr_sites_found = scan_for_kmers(results, results_location, separator_offset, window, get<0>(separator_indices[0]));
+		    if (output_reads || output_locations) {
 			sites_to_reads.insert(sites_to_reads.end(),
 					      num_crispr_sites_found,
 					      get<1>(separator_indices[0]) - 1);
@@ -396,8 +440,8 @@ void scan_stdin(bool output_reads) {
 
 		// scan between each block of separators
 		for (auto it = separator_indices.begin(); it != --separator_indices.end(); it++) {
-		    num_crispr_sites_found = scan_for_kmers(results, window + get<0>(*it), get<0>(*next(it)) - get<0>(*it));
-		    if (output_reads) {
+		    num_crispr_sites_found = scan_for_kmers(results, results_location, 0, window + get<0>(*it), get<0>(*next(it)) - get<0>(*it));
+		    if (output_reads || output_locations) {
 			sites_to_reads.insert(sites_to_reads.end(),
 					      num_crispr_sites_found,
 					      get<1>(*it));
@@ -406,14 +450,15 @@ void scan_stdin(bool output_reads) {
 
 		// scan after the last separator, to the end of the window
  		if (get<0>(separator_indices.back()) < len) {
-		    num_crispr_sites_found = scan_for_kmers(results, window + get<0>(separator_indices.back()), len - get<0>(separator_indices.back()));
-		    if (output_reads) {
+		    num_crispr_sites_found = scan_for_kmers(results, results_location, 0, window + get<0>(separator_indices.back()), len - get<0>(separator_indices.back()));
+		    if (output_reads || output_locations) {
 			sites_to_reads.insert(sites_to_reads.end(),
 					      num_crispr_sites_found,
 					      get<1>(separator_indices.back()));
 		    }
 		}
 
+		
 		if (get<0>(separator_indices.back()) >= len - overlap) {
 		    // the last separator was in the overlap region,
 		    // so adjust the overlap to start with the separator
@@ -428,8 +473,11 @@ void scan_stdin(bool output_reads) {
 		    int64_t last_read = get<1>(separator_indices.back());
 		    separator_indices.clear();
 		    separator_indices.push_back(make_pair(0, last_read));
+
+		    separator_offset = 0;
 		} else {
-		    // otherwise we're done with this batch of
+		    separator_offset = len - get<0>(separator_indices.back()) - overlap;
+                    // otherwise we're done with this batch of
 		    // separators, so clear them out
 		    separator_indices.clear();
 		}
@@ -453,9 +501,11 @@ void scan_stdin(bool output_reads) {
     }
 
     // these are parallel arrays and should have the same size
-    if (output_reads) {
+    if (output_reads || output_locations) {
 	assert(results.size() == sites_to_reads.size());
     }
+
+    assert( results_location.size() == results.size() );
     
     cerr << "Finished reading input."  << endl;
     cerr << "Total lines: "  << lines  << endl;
@@ -469,21 +519,28 @@ void scan_stdin(bool output_reads) {
     cerr << "Sorting " << results.size() << " candidate guides." << endl;
 
     vector<size_t> sorted_indices = sort_indexes(results);
-    
+
+    // for output_reads, we need to reads unique-ifyed both by read and by result
     vector<set<int64_t> > unique_sites_to_reads;
 
+    // for outputing location, we need reads unique-ifyed only by result
+    vector<vector<int64_t> > result_unique_sites_to_reads;
+    
     int64_t last = 0;
     
-    if (output_reads) {
+    if (output_reads || output_locations) {
 	for (int i = 0; i < results.size(); i++) {
 	    if (results[sorted_indices[i]] != last) {
 		set<int64_t> unique_reads;
-		unique_sites_to_reads.push_back(unique_reads);	    
+		unique_sites_to_reads.push_back(unique_reads);
+
+		vector<int64_t> result_unique_reads;
+		result_unique_sites_to_reads.push_back(result_unique_reads);
 	    }
 	    unique_sites_to_reads.back().insert(sites_to_reads[sorted_indices[i]]);
+	    result_unique_sites_to_reads.back().push_back(sites_to_reads[sorted_indices[i]]);
 	    last = results[sorted_indices[i]];
 	}
-
 
 	cerr << "Unique sites to reads: " << unique_sites_to_reads.size() << endl;
 
@@ -498,7 +555,22 @@ void scan_stdin(bool output_reads) {
 
 	cerr << "Guide " << max_read_idx << " had largest number of reads: " << max_reads << endl;
     }
-									 
+
+    vector<vector<pair<int64_t, int64_t> > > unique_results_location;
+
+    last = 0;
+    
+    if (output_locations) {
+	for (int i = 0; i < results.size(); i++) {
+	    if (results[sorted_indices[i]] != last) {
+		vector<pair<int64_t, int64_t> > unique_locations;
+		unique_results_location.push_back(unique_locations);	    
+	    }
+	    unique_results_location.back().push_back(results_location[sorted_indices[i]]);
+	    last = results[sorted_indices[i]];
+	}
+    }
+    
     // TODO: refactor these for loops so they all just use sorted indices
     // Don't need to sort both indices and results in place, but for
     // now keeps code complexity down
@@ -513,21 +585,23 @@ void scan_stdin(bool output_reads) {
         last = *it;
     }
 
-    if (output_reads) {
+    if (output_reads || output_locations) {
 	assert(guides == unique_sites_to_reads.size());
     }
-    
+
+    assert(guides == unique_results_location.size());
+
     cerr << "Outputting " << guides << " unique guides." << endl;
 
     char obuf[k-1];
     obuf[k-2] = 0;
     obuf[k-3] = 0;
 
-    if (output_reads) {
+    if (output_reads || output_locations) {
         obuf[k-3] = '\t';
     }
 
-    if (output_reads) {
+    if (output_reads || output_locations) {
 	cout << "Total reads: " << current_read << endl;
     }
     
@@ -536,6 +610,7 @@ void scan_stdin(bool output_reads) {
         if (next(it) == results.end() || *next(it) != *it) {
             decode(obuf, k-3, *it);
             cout << obuf;
+
             if (output_reads) {
 		for (auto it_reads = unique_sites_to_reads[i].begin(); it_reads != unique_sites_to_reads[i].end(); ++it_reads) {
 		    cout << *it_reads;
@@ -544,6 +619,18 @@ void scan_stdin(bool output_reads) {
 		    }
 		}
 	    }
+
+	    if (output_locations) {
+		assert(result_unique_sites_to_reads[i].size() == unique_results_location[i].size());
+
+		for (int j = 0; j < unique_results_location[i].size(); ++j) {
+		    cout << location_descriptions[result_unique_sites_to_reads[i][j] - 1] << ":" << get<0>(unique_results_location[i][j]) + 1 << ":" << get<1>(unique_results_location[i][j]) + 1;
+                    if (j < unique_results_location[i].size() - 1) {
+			cout << " ";
+		    }
+		}
+	    }
+	    
 	    cout << endl;
 	    ++i;
         }
@@ -656,6 +743,7 @@ int main(int argc, char** argv) {
     int opt;
 
     bool output_reads = false;
+    bool output_locations = true;
 
     cerr << PROGRAM_NAME << " " << PROGRAM_VERSION << endl;
     
@@ -677,7 +765,7 @@ int main(int argc, char** argv) {
     
     init_encoding();
     silent_tests();
-    scan_stdin(output_reads);
+    scan_stdin(output_reads, output_locations);
     return 0;
 }
 #endif
