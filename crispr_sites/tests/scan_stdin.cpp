@@ -16,7 +16,7 @@ using namespace std;
 // unit tests for scan_stdin()
 
 // forward declarations we need
-void scan_stdin(bool output_counts);
+void scan_stdin(bool output_counts, bool output_locations);
 
 void decode(char* buf, const int len, const int64_t code);
 template<int len> int64_t encode(const char* buf);
@@ -182,7 +182,7 @@ TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
     write(stdin_pipe[WRITE_PIPE], input, strlen(input));
     close(stdin_pipe[WRITE_PIPE]);
 
-    scan_stdin(false);
+    scan_stdin(false, false);
 
     fflush(stdout);
 
