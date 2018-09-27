@@ -245,7 +245,7 @@ int try_match(vector<int64_t>& results, const char* bufi) {
 }
 
 
-int scan_for_kmers(vector<int64_t>& results, vector<tuple<int64_t, int64_t, char> >& results_location, int64_t offset, const char* buf, size_t len) {
+int scan_for_kmers(vector<int64_t>& results, vector<tuple<int64_t, int64_t, char> >& results_location, int64_t offset, const char* buf, size_t len, bool output_locations) {
     assert(k <= 24);
 
     if (len < k) {
@@ -258,14 +258,14 @@ int scan_for_kmers(vector<int64_t>& results, vector<tuple<int64_t, int64_t, char
     for (int i = 0;  i <= len - k;  ++i) {
         // match ...GG, or ...GN, or ...NG, or ...NN
         num_matches_found = try_match<forward_direction, 'G'>(results, buf + i);
-	if (num_matches_found) {
+	if (output_locations && num_matches_found) {
 	    // compute the location of this protospacer
 	    results_location.insert(results_location.end(), num_matches_found, make_tuple(offset + i, offset + i + (k - 3) - 1, '+'));
 	}
 
         // match CC..., or CN..., or NC..., or NN...
         num_matches_found = try_match<reverse_complement, 'C'>(results, buf + i);
-	if (num_matches_found) {
+	if (output_locations && num_matches_found) {
 	    // compute the location of this protospacer
 	    results_location.insert(results_location.end(), num_matches_found, make_tuple(offset + i + 3, offset + i + k - 1, '-'));
 	}
@@ -358,9 +358,11 @@ void scan_stdin(bool output_reads, bool output_locations) {
 		    separator_indices.push_back(make_pair(len, current_read + 1));
 		    current_read += 1;
 
-		    current_description[len_description] = 0;
-		    location_descriptions.push_back(current_description);
-		    len_description = 0;
+		    if (output_locations) {
+			current_description[len_description] = 0;
+			location_descriptions.push_back(current_description);
+			len_description = 0;
+		    }
 		}
                 chrm_comment = false;
             } else if (!(chrm_comment)) {
@@ -373,9 +375,11 @@ void scan_stdin(bool output_reads, bool output_locations) {
 		    }
                 }
             } else if (chrm_comment) {
-		current_description[len_description++] = window[i];
-		// location descriptions shouldn't be larger than BUFFER_SIZE
-		assert( len_description < BUFFER_SIZE );
+		if (output_locations) {
+		    current_description[len_description++] = window[i];
+		    // location descriptions shouldn't be larger than BUFFER_SIZE
+		    assert( len_description < BUFFER_SIZE );
+		}
 	    }
         }
 
@@ -424,10 +428,12 @@ void scan_stdin(bool output_reads, bool output_locations) {
 	    if (separator_indices.size() == 0) {
 		// in a properly formatted FASTA file, this needs to
 		// be correctly set below before we reach this point
-		assert(bases_since_separator_start >= 0);
+		if (output_locations) {
+		    assert(bases_since_separator_start >= 0);
+		}
 
 		// if no separators in this window, just scan it
-		num_crispr_sites_found = scan_for_kmers(results, results_location, bases_since_separator_start, window, len);
+		num_crispr_sites_found = scan_for_kmers(results, results_location, bases_since_separator_start, window, len, output_locations);
 		if (output_reads || output_locations) {
 		    sites_to_reads.insert(sites_to_reads.end(), num_crispr_sites_found, current_read);
 		}
@@ -436,7 +442,7 @@ void scan_stdin(bool output_reads, bool output_locations) {
 	    } else {
 		// scan from the start of the window to the first separator
 		if (get<0>(separator_indices[0]) > 0) {
-		    num_crispr_sites_found = scan_for_kmers(results, results_location, bases_since_separator_start, window, get<0>(separator_indices[0]));
+		    num_crispr_sites_found = scan_for_kmers(results, results_location, bases_since_separator_start, window, get<0>(separator_indices[0]), output_locations);
 		    if (output_reads || output_locations) {
 			sites_to_reads.insert(sites_to_reads.end(),
 					      num_crispr_sites_found,
@@ -446,7 +452,7 @@ void scan_stdin(bool output_reads, bool output_locations) {
 
 		// scan between each block of separators
 		for (auto it = separator_indices.begin(); it != --separator_indices.end(); it++) {
-		    num_crispr_sites_found = scan_for_kmers(results, results_location, 0, window + get<0>(*it), get<0>(*next(it)) - get<0>(*it));
+		    num_crispr_sites_found = scan_for_kmers(results, results_location, 0, window + get<0>(*it), get<0>(*next(it)) - get<0>(*it), output_locations);
 		    if (output_reads || output_locations) {
 			sites_to_reads.insert(sites_to_reads.end(),
 					      num_crispr_sites_found,
@@ -456,7 +462,7 @@ void scan_stdin(bool output_reads, bool output_locations) {
 
 		// scan after the last separator, to the end of the window
  		if (get<0>(separator_indices.back()) < len) {
-		    num_crispr_sites_found = scan_for_kmers(results, results_location, 0, window + get<0>(separator_indices.back()), len - get<0>(separator_indices.back()));
+		    num_crispr_sites_found = scan_for_kmers(results, results_location, 0, window + get<0>(separator_indices.back()), len - get<0>(separator_indices.back()), output_locations);
 		    if (output_reads || output_locations) {
 			sites_to_reads.insert(sites_to_reads.end(),
 					      num_crispr_sites_found,
@@ -511,7 +517,9 @@ void scan_stdin(bool output_reads, bool output_locations) {
 	assert(results.size() == sites_to_reads.size());
     }
 
-    assert( results_location.size() == results.size() );
+    if (output_locations) {
+	assert( results_location.size() == results.size() );
+    }
     
     cerr << "Finished reading input."  << endl;
     cerr << "Total lines: "  << lines  << endl;
@@ -609,7 +617,7 @@ void scan_stdin(bool output_reads, bool output_locations) {
         obuf[k-3] = '\t';
     }
 
-    if (output_reads || output_locations) {
+    if (output_reads) {
 	cout << "Total reads: " << current_read << endl;
     }
     
