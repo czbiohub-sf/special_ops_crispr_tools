@@ -47,7 +47,12 @@ func main() {
 	}
 
 	log.Println("ingesting host 20mers")
-	m := NewOfftargetMatcher(bufio.NewScanner(reader))
+
+	buffer := make([]byte, 20 * 1024 * 1024)
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(buffer, 20 * 1024*1024)
+	
+	m := NewOfftargetMatcher(scanner)
 	reader.Close()
 
 	http.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
