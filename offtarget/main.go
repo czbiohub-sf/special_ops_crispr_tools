@@ -185,8 +185,6 @@ func main() {
 
 			line, err := reader.ReadString('\n')
 			fields := strings.Fields(line)			
-			log.Println(fields)
-			log.Println(err)
 			j := 0
 			
 			for j < len(matches) && err == nil {
@@ -195,7 +193,7 @@ func main() {
 					continue
 				}
 				
-				log.Println(fmt.Sprintf("Searching for locations for match %s %d", matches[j].Protospacer, matches[j].Protospacer_code))
+				//log.Println(fmt.Sprintf("Searching for locations for match %s %d", matches[j].Protospacer, matches[j].Protospacer_code))
 				for matches[j].Protospacer_code != encode(fields[0]) {
 					// read the next line, until we find the match
 					line, err = reader.ReadString('\n')
@@ -204,7 +202,7 @@ func main() {
 				}
 
 				matches[j].Location = fields[1:]
-				log.Println(fmt.Sprintf("Match %d found location %s", j, matches[j].Location))				
+				//log.Println(fmt.Sprintf("Match %d found location %s", j, matches[j].Location))				
 				j = j + 1				
 			}
 
