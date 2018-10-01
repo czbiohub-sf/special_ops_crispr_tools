@@ -16,7 +16,7 @@ using namespace std;
 // unit tests for scan_stdin()
 
 // forward declarations we need
-void scan_stdin(bool output_counts);
+void scan_stdin(bool output_counts, bool output_locations);
 
 void decode(char* buf, const int len, const int64_t code);
 template<int len> int64_t encode(const char* buf);
@@ -50,6 +50,7 @@ void random_sequence_no_pam(char* output, int len) {
 	    output[i] = random_base();
 	}
     }
+    output[len-1] = 0;
 }
 
 TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
@@ -118,8 +119,9 @@ TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
     random_sequence_no_pam(input, INPUT_SIZE);
 
     SECTION("detect nothing if given no crispr sites") {
-    	// noop, just make sure 
+    	// noop, just make sure
     }
+
     SECTION("expected crispr sites detected") {
     	for (int i = k - 1; i < INPUT_SIZE - k; i++) {
     	    if (rand() % 10 == 0) {
@@ -154,35 +156,35 @@ TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
     	input[separator_position - 1] = 'C';	
     }
     SECTION("expected crispr sites detected with separators") {
-	for (int i = k; i < INPUT_SIZE - 3*k - 2; i++) {
-	    if (rand() % 10 == 0) {
-		input[i] = 'T';
-		input[i - 1] = 'G';
-		input[i - 2] = 'G';
-		input[i - 3] = 'A';
+    	for (int i = k; i < INPUT_SIZE - 3*k - 2; i++) {
+    	    if (rand() % 10 == 0) {
+    		input[i] = 'T';
+    		input[i - 1] = 'G';
+    		input[i - 2] = 'G';
+    		input[i - 3] = 'A';
 
-		char crispr_site[k - 2];
-		crispr_site[k - 3] = 0;
+    		char crispr_site[k - 2];
+    		crispr_site[k - 3] = 0;
 
-		for (int j = 0; j < k - 3; j++) {
-		    crispr_site[j] = input[i - k + j];
-		}
-		cerr << i << " " << crispr_site << endl;
-		expected_crispr_sites.push_back(string(crispr_site));
+    		for (int j = 0; j < k - 3; j++) {
+    		    crispr_site[j] = input[i - k + j];
+    		}
+    		cerr << i << " " << crispr_site << endl;
+    		expected_crispr_sites.push_back(string(crispr_site));
 
-		// spread out crispr sites
-		input[i + 2] = '>';
-		input[i + 2*k] = '\n';
-		i += 3*k + 2;
-	    }
-	}
+    		// spread out crispr sites
+    		input[i + 2] = '>';
+    		input[i + 2*k] = '\n';
+    		i += 3*k + 2;
+    	    }
+    	}
     }
     
     // Run the program!
     write(stdin_pipe[WRITE_PIPE], input, strlen(input));
     close(stdin_pipe[WRITE_PIPE]);
 
-    scan_stdin(false);
+    scan_stdin(false, false);
 
     fflush(stdout);
 

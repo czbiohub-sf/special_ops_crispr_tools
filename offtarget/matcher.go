@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"log"
+	"strings"
+	"fmt"
 )
 
 type twentymer uint64
@@ -61,10 +63,16 @@ func build_index(scanner *bufio.Scanner) [][]tenmer {
 	ind := make([][]tenmer, 1024*1024)
 
 	for scanner.Scan() {
-		s := scanner.Text()
+		s := strings.Fields(scanner.Text())[0]
 		t := encode(s)
 		ba, c := split_in_halves(t)
 		ind[ba] = append(ind[ba], c)
+	}
+
+	err := scanner.Err()
+
+	if err != nil {
+		panic(fmt.Sprintf("Encountered error %s scanning input file", err.Error()))	
 	}
 
 	log.Printf("computing stats\n")
