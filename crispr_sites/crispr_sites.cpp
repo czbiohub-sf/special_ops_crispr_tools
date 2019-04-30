@@ -106,6 +106,7 @@ int64_t bitcode_for_base(const char c) {
         case 'T':
             return 5;
     }
+    cerr << "bad base: " << c << endl;
     assert(false);
 }
 
@@ -123,6 +124,7 @@ char base_for_bitcode(const int64_t single_base_code) {
         case 5:
             return 'T';
     }
+    cerr << "bad bitcode: " << single_base_code << endl;
     assert(false);
 }
 
@@ -295,6 +297,8 @@ void scan_stdin(bool output_reads) {
 
     int64_t current_read = 0;
 
+    int num_ambiguous = 0;
+    
     while (true) {
 
         assert(0 <= overlap);
@@ -316,6 +320,7 @@ void scan_stdin(bool output_reads) {
         int len = overlap;
         for (int i = overlap;  i < bytes_read + overlap;  ++i) {
             char c = toupper(window[i]);
+
             if (c == '\n') {
                 ++lines;
 		if (chrm_comment) {
@@ -327,6 +332,12 @@ void scan_stdin(bool output_reads) {
                 if (c == '>') {
                     chrm_comment = true;
                 } else {
+		    // Convert ambiguious characters to N
+		    if (c != 'A' && c != 'T' && c != 'G' && c != 'C' && c != 'N' && c != '-') {
+			c = 'N';
+			num_ambiguous++;
+		    }
+
                     // ignore gap characters in sequence
 		    if (c != '-') {
 			window[len++] = c;
@@ -460,7 +471,9 @@ void scan_stdin(bool output_reads) {
     cerr << "Finished reading input."  << endl;
     cerr << "Total lines: "  << lines  << endl;
     cerr << "Total bases: "  << bases  << endl;
-
+    if (num_ambiguous > 0) {
+	cerr << "Converted " << num_ambiguous << " ambiguous bases to N" << endl;
+    }
     
     // If there are tons of duplicates, we may benefit from sorting each batch
     // and then merging incrementally with c++ algorithm set_union,
