@@ -106,7 +106,7 @@ int64_t bitcode_for_base(const char c) {
         case 'T':
             return 5;
     }
-    cerr << c;
+    cerr << "bad base: " << c << endl;
     assert(false);
 }
 
@@ -124,7 +124,7 @@ char base_for_bitcode(const int64_t single_base_code) {
         case 5:
             return 'T';
     }
-    cerr << single_base_code;
+    cerr << "bad bitcode: " << single_base_code << endl;
     assert(false);
 }
 
