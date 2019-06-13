@@ -1,3 +1,5 @@
+prefix ?= /usr/local
+
 setup: build-all 
 
 build-all: build-cripsr-sites build-offtarget install-ash
@@ -17,3 +19,6 @@ install-ash:
 test:
 	cd crispr_sites && make tests
 
+install: build-cripsr-sites build-offtarget
+	install crispr_sites/crispr_sites $(prefix)/bin
+	install offtarget/offtarget $(prefix)/bin
