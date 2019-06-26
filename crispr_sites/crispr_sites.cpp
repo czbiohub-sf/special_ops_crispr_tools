@@ -329,6 +329,8 @@ void scan_stdin(bool output_reads) {
 		}
                 chrm_comment = false;
             } else if (!(chrm_comment)) {
+		assert(isprint(c));
+
                 if (c == '>') {
                     chrm_comment = true;
                 } else {
