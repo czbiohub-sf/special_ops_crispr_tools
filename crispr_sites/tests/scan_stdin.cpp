@@ -8,6 +8,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <time.h>
 
 #include "../crispr_sites.hpp"
 
@@ -54,6 +55,8 @@ void random_sequence_no_pam(char* output, int len) {
 
 TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
     init_encoding();
+
+    srand(time(NULL));
     
     constexpr auto READ_PIPE = 0;
     constexpr auto WRITE_PIPE = 1;
@@ -116,6 +119,7 @@ TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
     
     // Initialize input to a random sequence containing no crispr sites
     random_sequence_no_pam(input, INPUT_SIZE);
+    input[INPUT_SIZE - 1] = 0;
 
     SECTION("detect nothing if given no crispr sites") {
     	// noop, just make sure 
@@ -134,6 +138,7 @@ TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
     		for (int j = 0; j < k - 3; j++) {
     		    crispr_site[j] = input[i - (k - 1) + j];
     		}
+		
     		expected_crispr_sites.push_back(string(crispr_site));
 
     		// spread out crispr sites
@@ -167,7 +172,6 @@ TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
 		for (int j = 0; j < k - 3; j++) {
 		    crispr_site[j] = input[i - k + j];
 		}
-		cerr << i << " " << crispr_site << endl;
 		expected_crispr_sites.push_back(string(crispr_site));
 
 		// spread out crispr sites
@@ -191,7 +195,7 @@ TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
     fcntl(stdout_pipe[READ_PIPE], F_SETFL, O_NONBLOCK);
 
     vector<string> detected_crispr_sites;
-    
+
     // Read redirected stdin until the stream is empty        
     while (true) {
 	char crispr_site[k - 2];
@@ -227,6 +231,20 @@ TEST_CASE( "scan_stdin correctly finds crispr sites", "[scan_stdin]" ) {
     dup2(original_stdin, STDIN_FILENO);
     dup2(original_stdout, STDOUT_FILENO);
     dup2(original_stderr, STDERR_FILENO);
+
+    cerr << "Expected CRISPR sites" << endl;
+
+    for (int i = 0; i < expected_crispr_sites.size(); i++) {
+	cerr << expected_crispr_sites[i] << endl;
+    }
+
+    cerr << endl << "Detected CRISPR sites" << endl;
+
+    for (int i = 0; i < detected_crispr_sites.size(); i++) {
+	cerr << detected_crispr_sites[i] << endl;
+    }
+
+    cerr << endl << "Input" << endl << input << endl;
     
     REQUIRE(detected_crispr_sites.size() == expected_crispr_sites.size());
     
