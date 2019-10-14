@@ -2,7 +2,7 @@ PREFIX ?= /usr/local
 
 setup: build-all
 
-build-all: build-cripsr-sites build-offtarget
+build-all: build-cripsr-sites offtarget/offtarget
 
 build-cripsr-sites:
 	cd crispr_sites && $(MAKE)
