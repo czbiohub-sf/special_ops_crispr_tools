@@ -2,6 +2,8 @@
 
 Computational tools for identifying CRISPR targets and offtargets.
 
+This repository is used by the [DASHit](https://github.com/czbiohub-sf/dashit) tools.
+
 # Preparing an off-target index for the human genome
 
 First, download hg38.fa.gz, the human genome.
